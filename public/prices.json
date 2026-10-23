@@ -1,0 +1,121 @@
+{
+ "updated": "2026-10-13",
+ "formats": [
+  {
+   "code": "10x15",
+   "label": "10×15",
+   "size": "10 × 15",
+   "express": true
+  },
+  {
+   "code": "15x21",
+   "label": "15×21",
+   "size": "15 × 21",
+   "express": true
+  },
+  {
+   "code": "20x30",
+   "label": "20×30",
+   "size": "20 × 30",
+   "express": false
+  },
+  {
+   "code": "30x40",
+   "label": "30×40",
+   "size": "30 × 40",
+   "express": false
+  }
+ ],
+ "papers": [
+  {
+   "code": "glossy",
+   "label": "Глянцевая"
+  },
+  {
+   "code": "matte",
+   "label": "Матовая"
+  }
+ ],
+ "edges": [
+  {
+   "code": "crop",
+   "label": "С обрезкой"
+  },
+  {
+   "code": "fit",
+   "label": "С полями"
+  }
+ ],
+ "prices": {
+  "10x15": {
+   "glossy": 20,
+   "matte": 24
+  },
+  "15x21": {
+   "glossy": 45,
+   "matte": 52
+  },
+  "20x30": {
+   "glossy": 110,
+   "matte": 125
+  },
+  "30x40": {
+   "glossy": 290,
+   "matte": 330
+  }
+ },
+ "urgency": [
+  {
+   "code": "standard",
+   "label": "Стандарт",
+   "term": "через 2 дня",
+   "percent": 100
+  },
+  {
+   "code": "tomorrow",
+   "label": "Завтра",
+   "term": "завтра",
+   "percent": 130
+  },
+  {
+   "code": "express",
+   "label": "Экспресс",
+   "term": "через 2 часа",
+   "percent": 170
+  }
+ ],
+ "settings": {
+  "discount_threshold": 50,
+  "discount_percent": 10,
+  "hint_window": 10,
+  "min_order": 100,
+  "max_qty": 1000,
+  "max_lines": 20,
+  "express_hours": 2,
+  "express_stop_before_close_min": 150,
+  "express_start_not_before": "11:00",
+  "open": "10:00",
+  "close": "20:00",
+  "ready_from": "12:00"
+ },
+ "points": [
+  {
+   "code": "p1",
+   "name": "Центр",
+   "address": "ул. Садовая, 12",
+   "hours": "ежедневно 10:00–20:00"
+  },
+  {
+   "code": "p2",
+   "name": "Северный",
+   "address": "пр. Мира, 45",
+   "hours": "ежедневно 10:00–20:00"
+  },
+  {
+   "code": "p3",
+   "name": "Южный",
+   "address": "ул. Лесная, 7, ТЦ «Олимп»",
+   "hours": "ежедневно 10:00–20:00"
+  }
+ ]
+}

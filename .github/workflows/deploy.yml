@@ -1,0 +1,84 @@
+# Автодеплой Фоточки на VPS.
+# push в main → автотесты → выкладка на сервер по SSH.
+# Откат: Actions → Deploy → Run workflow → вписать SHA прошлой версии.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "SHA коммита для выкладки. Пусто — последний коммит main. Для отката — SHA прошлой версии"
+        required: false
+        default: ""
+
+# Два деплоя одновременно не идут: второй ждёт, пока закончится первый.
+concurrency:
+  group: deploy-fotochka
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Автотесты
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.sha.outputs.full }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Установка зависимостей
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      - name: Автотесты
+        run: npm test --if-present
+
+      - name: Полный SHA коммита
+        id: sha
+        run: echo "full=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Выкладка на сервер
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.test.outputs.sha }}
+
+      - name: Выкатить по SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          SHA: ${{ needs.test.outputs.sha }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # На сервер уходит только код из git (без .env и данных).
+          # Ключ на сервере умеет одно: принять архив и запустить скрипт выкладки.
+          git archive --format=tar "$SHA" | ssh \
+            -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "deploy@${HOST}" "$SHA"
+
+      - name: Удалить ключ с раннера
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

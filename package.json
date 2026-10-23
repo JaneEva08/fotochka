@@ -1,0 +1,12 @@
+{
+  "name": "fotochka",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Лендинг сервиса фотопечати с калькулятором и приёмом заказов (учебный проект)",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node --test tests/calc.test.js tests/api.test.js",
+    "prices": "python3 tools/xlsx_to_json.py"
+  },
+  "engines": { "node": ">=22.13" }
+}

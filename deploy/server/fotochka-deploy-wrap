@@ -1,0 +1,20 @@
+#!/bin/sh
+# Ставится в /usr/local/bin/fotochka-deploy-wrap.
+# Единственная команда, которую может выполнить ключ GitHub Actions
+# (прописана в ~deploy/.ssh/authorized_keys через command="...").
+# Принимает от SSH только SHA коммита и передаёт архив из stdin скрипту выкладки.
+set -eu
+
+sha="${SSH_ORIGINAL_COMMAND:-}"
+case "$sha" in
+  "" | *[!0-9a-f]*)
+    echo "отказ: этот ключ умеет только выкладывать Фоточку, ожидаю SHA коммита" >&2
+    exit 1
+    ;;
+esac
+if [ "${#sha}" -ne 40 ]; then
+  echo "отказ: ожидаю полный SHA (40 символов)" >&2
+  exit 1
+fi
+
+exec sudo -n /usr/local/bin/fotochka-deploy "$sha"

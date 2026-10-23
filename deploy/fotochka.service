@@ -1,0 +1,20 @@
+[Unit]
+Description=Fotochka — сайт и приём заказов
+After=network.target
+
+[Service]
+Type=simple
+User=fotochka
+WorkingDirectory=/opt/fotochka
+ExecStart=/usr/bin/node server/server.js
+Restart=always
+RestartSec=3
+# защита: сервис видит только свою папку
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/fotochka/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

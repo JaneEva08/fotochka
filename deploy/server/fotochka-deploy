@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# Выкладка новой версии Фоточки. Ставится в /usr/local/bin/fotochka-deploy.
+# Запускается от root через sudo из fotochka-deploy-wrap (его вызывает GitHub Actions).
+#
+#   stdin — tar-архив репозитория (git archive), $1 — полный SHA коммита.
+#
+# Что делает:
+#   1. Распаковывает код в /opt/fotochka-releases/<SHA>, ставит зависимости.
+#   2. Копирует его в /opt/fotochka, не трогая .env и data/.
+#   3. Перезапускает службу и проверяет /api/health.
+#   4. Если проверка не прошла — возвращает прошлую версию и завершается с ошибкой.
+set -Eeuo pipefail
+umask 022
+
+APP_DIR=${APP_DIR:-/opt/fotochka}
+REL_DIR=${REL_DIR:-/opt/fotochka-releases}
+APP_USER=${APP_USER:-fotochka}
+SERVICE=${SERVICE:-fotochka}
+SYSTEMCTL=${SYSTEMCTL:-systemctl}
+KEEP=${KEEP:-5}
+HEALTH_TRIES=${HEALTH_TRIES:-20}
+LOCK_FILE=${LOCK_FILE:-/run/fotochka-deploy.lock}
+
+log() { printf '[deploy %s] %s\n' "$(date '+%F %T')" "$*"; }
+die() { log "ОШИБКА: $*"; exit 1; }
+
+SHA=${1:-}
+[[ $SHA =~ ^[0-9a-f]{40}$ ]] || die "ожидаю полный SHA коммита (40 символов), получено: '${SHA}'"
+[[ -d $APP_DIR ]] || die "нет папки $APP_DIR"
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || die "другая выкладка уже идёт"
+
+install -d -m 755 "$REL_DIR"
+install -d -m 755 -o "$APP_USER" -g "$APP_USER" "$REL_DIR/.npm-cache"
+
+app_port() {
+  local p=""
+  if [[ -f $APP_DIR/.env ]]; then
+    p=$(grep -E '^[[:space:]]*PORT=' "$APP_DIR/.env" | tail -n1 | cut -d= -f2- | tr -d '"'"'"' \r' || true)
+  fi
+  echo "${p:-3047}"
+}
+
+health() {
+  local port url i
+  port=$(app_port)
+  url="http://127.0.0.1:${port}/api/health"
+  for ((i = 1; i <= HEALTH_TRIES; i++)); do
+    if "$SYSTEMCTL" is-active --quiet "$SERVICE" && curl -fsS --max-time 3 "$url" >/dev/null 2>&1; then
+      log "проверка $url — ок (попытка $i)"
+      return 0
+    fi
+    sleep 1
+  done
+  log "проверка $url не прошла за $HEALTH_TRIES с"
+  return 1
+}
+
+# Копирует релиз в рабочую папку. .env и data/ — это настройки и заказы, их не трогаем.
+switch_to() {
+  local src=$1
+  rsync -a --delete \
+    --exclude=/.env --exclude=/data/ --exclude=/.npm/ \
+    "$src"/ "$APP_DIR"/
+  chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+  "$SYSTEMCTL" restart "$SERVICE" 9>&-   # 9>&- — не передавать службе файл блокировки
+}
+
+# ---------- 1. Принять код ----------
+NEW="$REL_DIR/$SHA"
+TMP=$(mktemp -d "$REL_DIR/.incoming.XXXXXX")
+cleanup_tmp() { rm -rf "$TMP"; }
+trap cleanup_tmp EXIT
+
+log "принимаю версию ${SHA:0:7}"
+tar -x --no-same-owner --no-same-permissions -C "$TMP" -f -
+[[ -f $TMP/package.json ]] || die "в архиве нет package.json — это точно репозиторий Фоточки?"
+if [[ -e $TMP/.env ]]; then
+  die "в репозитории лежит .env с секретами. Удалите его из git, отзовите ключи ВК и задайте новый пароль /admin"
+fi
+if [[ -e $TMP/data ]]; then
+  log "в репозитории есть папка data/ — на сервер её не копирую, рабочие данные остаются"
+  rm -rf "$TMP/data"
+fi
+
+# ---------- 2. Зависимости (не от root) ----------
+chown -R "$APP_USER:$APP_USER" "$TMP"
+log "ставлю зависимости"
+npm_cmd=(npm install --omit=dev --no-audit --no-fund)
+[[ -f $TMP/package-lock.json ]] && npm_cmd=(npm ci --omit=dev --no-audit --no-fund)
+(cd "$TMP" && runuser -u "$APP_USER" -- env HOME="$REL_DIR/.npm-cache" \
+  npm_config_cache="$REL_DIR/.npm-cache" "${npm_cmd[@]}") \
+  || die "npm не смог поставить зависимости, на сайте ничего не менялось"
+
+echo "$SHA" >"$TMP/REVISION"
+rm -rf "$NEW"
+mv "$TMP" "$NEW"
+trap - EXIT
+
+# ---------- 3. Переключение и проверка ----------
+PREV=$(cat "$REL_DIR/CURRENT" 2>/dev/null || true)
+log "переключаю сайт на ${SHA:0:7} (было: ${PREV:-нет данных})"
+switch_to "$NEW"
+
+# Две проверки с паузой: ловим версию, которая стартует и сразу падает по кругу.
+if health && sleep 3 && health; then
+  echo "$SHA" >"$REL_DIR/CURRENT"
+  # Храним последние $KEEP версий + текущую + initial (снимок до автодеплоя).
+  mapfile -t old < <(
+    find "$REL_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -printf '%T@ %f\n' \
+      | sort -rn | awk '{print $2}' | grep -vxF -e "$SHA" -e initial | tail -n +"$KEEP"
+  )
+  for d in "${old[@]}"; do rm -rf "${REL_DIR:?}/$d"; done
+  log "готово: на сайте версия ${SHA:0:7}"
+  exit 0
+fi
+
+# ---------- 4. Откат ----------
+log "новая версия не поднялась — возвращаю прошлую"
+"$SYSTEMCTL" status "$SERVICE" --no-pager -n 20 2>&1 || true
+if [[ -n $PREV && -d $REL_DIR/$PREV ]]; then
+  switch_to "$REL_DIR/$PREV"
+  if health; then
+    die "версия ${SHA:0:7} не запустилась, сайт возвращён на ${PREV:0:7}"
+  fi
+  die "версия ${SHA:0:7} не запустилась, и откат на ${PREV:0:7} тоже не помог — нужен ручной разбор"
+fi
+die "версия ${SHA:0:7} не запустилась, а прошлой версии для отката нет — нужен ручной разбор"
