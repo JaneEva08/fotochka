@@ -203,7 +203,10 @@
   } else document.body.classList.add('calc-visible');
 
   loadPrices().then(function (p) {
-    P = p; $('#minOrder').textContent = rub(P.settings.min_order); render();
+    P = p; $('#minOrder').textContent = rub(P.settings.min_order);
+    // цены «от … ₽» на карточках форматов — из прайса (минимальная по бумаге)
+    document.querySelectorAll('.bubble[data-fmt]').forEach(function (el) { var row = P.prices[el.getAttribute('data-fmt')]; if (!row) return; var min = Math.min.apply(null, Object.keys(row).map(function (k) { return row[k]; })); el.textContent = 'от ' + rub(min); });
+    render();
     // раз в минуту проверяем, не закрылся ли приём экспресса
     setInterval(function () { var changed = false; lines.forEach(function (l) { changed = fixUrgency(l) || changed; }); if (changed) render(); else calc(); }, 60000);
   }).catch(function () {

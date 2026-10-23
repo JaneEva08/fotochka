@@ -50,7 +50,7 @@ def main(src, dst):
     points = [{'code': r['Код'], 'name': r['Название'], 'address': r['Адрес'], 'hours': r['Часы работы']} for r in rows('Пункты выдачи')]
     out = {'updated': __import__('datetime').date.today().isoformat(), 'formats': formats,
            'papers': [{'code': v, 'label': k} for k, v in PAPER.items()],
-           'edges': [{'code': 'crop', 'label': 'С обрезкой'}, {'code': 'fit', 'label': 'С полями'}],
+           'edges': [{'code': 'crop', 'label': 'С обрезкой'}, {'code': 'fit', 'label': 'С белыми полями'}],
            'prices': prices, 'urgency': urgency, 'settings': settings, 'points': points}
     json.dump(out, open(dst, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     print('OK →', dst)

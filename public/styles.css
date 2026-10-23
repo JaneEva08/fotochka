@@ -278,3 +278,11 @@ select option:disabled{color:#888}
 
 .e2{color:#F87171;font-size:13px;font-weight:600;margin-top:5px}
 .check+.e2{margin:-4px 0 8px 29px}
+
+/* фото вместо иллюстраций (19.10) */
+.hero-img{position:absolute;left:50%;top:50%;width:min(440px,100%);height:auto;transform:translate(-50%,-50%) rotate(-2deg);border-radius:22px;box-shadow:0 24px 60px rgba(30,20,70,.35)}
+img.fscene{aspect-ratio:16/10;object-fit:cover;object-position:top}
+.vh{position:absolute!important;width:1px;height:1px;padding:0!important;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;box-shadow:none!important}
+.edge-demo figure{flex:1 1 0;min-width:0;max-width:170px}
+.e2i{display:block;width:100%;height:auto;border-radius:6px;margin-bottom:8px}
+@media(max-width:900px){.hero-img{width:min(360px,92%)}}
